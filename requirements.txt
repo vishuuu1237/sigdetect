@@ -2,8 +2,7 @@ ultralytics>=8.0.0
 torch
 torchvision
 opencv-python-headless
-paddleocr>=2.7.0
-paddlepaddle>=2.6.0
+easyocr
 numpy
 pandas
 streamlit>=1.35.0
@@ -11,4 +10,5 @@ kagglehub
 roboflow
 pyyaml
 tqdm
+
 

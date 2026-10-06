@@ -11,15 +11,19 @@ import cv2
 import torch
 import numpy as np
 from ultralytics import YOLO
+# Optional OCR imports (EasyOCR preferred for cloud compatibility, PaddleOCR fallback)
+try:
+    import easyocr
+    _HAS_EASYOCR = True
+except ImportError:
+    _HAS_EASYOCR = False
+
 try:
     from paddleocr import PaddleOCR
+    _HAS_PADDLEOCR = True
 except ImportError:
-    print("Warning: paddleocr not installed. OCR will be disabled.")
-    class PaddleOCR:
-        def __init__(self, *args, **kwargs):
-            pass
-        def __call__(self, img):
-            return []
+    _HAS_PADDLEOCR = False
+
 from compliance import check_compliance
 from tracker import IOUTracker
 from output_handler import save_violation
@@ -54,7 +58,19 @@ class SignalGuardPipeline:
         # Load COCO person detector (YOLOv8) for occupant counting
         self.person_detector = YOLO("yolov8n.pt")
         # Initialise OCR
-        self.ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False)
+        self.ocr_engine = None
+        if _HAS_EASYOCR:
+            try:
+                self.ocr_engine = ("easyocr", easyocr.Reader(['en'], gpu=use_gpu and torch.cuda.is_available()))
+            except Exception as e:
+                print(f"Warning: EasyOCR init failed: {e}")
+        if self.ocr_engine is None and _HAS_PADDLEOCR:
+            try:
+                self.ocr_engine = ("paddleocr", PaddleOCR(use_angle_cls=True, lang='en', use_gpu=use_gpu and torch.cuda.is_available()))
+            except Exception as e:
+                print(f"Warning: PaddleOCR init failed: {e}")
+        if self.ocr_engine is None:
+            print("Warning: No OCR engine available. License plate text recognition will be simulated.")
         # Initialise tracker
         self.tracker = IOUTracker(iou_threshold=0.3)
         # Counters for final summary
@@ -121,10 +137,21 @@ class SignalGuardPipeline:
                 iou = inter / (area_v + area_p - inter + 1e-6)
                 if iou > 0.3:
                     plate_crop = self._crop(frame, pbox)
-                    # Deskew placeholder – just use the crop directly
-                    ocr_res = self.ocr(plate_crop)
-                    if ocr_res and len(ocr_res[0]) > 0:
-                        plate_text = ocr_res[0][0][1]
+                    # Run available OCR engine
+                    if self.ocr_engine is not None and plate_crop.size > 0:
+                        engine_name, engine = self.ocr_engine
+                        try:
+                            if engine_name == "easyocr":
+                                results = engine.readtext(plate_crop)
+                                if results:
+                                    plate_text = results[0][1]
+                            elif engine_name == "paddleocr":
+                                results = engine(plate_crop)
+                                if results and len(results[0]) > 0:
+                                    plate_text = results[0][0][1]
+                        except Exception as e:
+                            print(f"OCR reading error: {e}")
+                    if plate_text:
                         self.plates_read += 1
                         compliant = check_compliance(plate_text)
                     break
