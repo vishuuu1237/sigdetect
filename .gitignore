@@ -46,8 +46,12 @@ models/*.pt
 models/*.onnx
 data/raw/*
 !data/raw/.gitkeep
+data/annotated/*
+!data/annotated/.gitkeep
 output/*
 !output/.gitkeep
 !output/violations/.gitkeep
 runs/
 .cache/
+*.pt
+test.jpg

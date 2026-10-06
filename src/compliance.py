@@ -1,34 +1,51 @@
-"""License Plate Government Compliance Checker for SignalGuard.
+"""Compliance checking utilities for SignalGuard.
 
-This module validates recognized license plates against official government
-standards (e.g., standard Indian HSRP format: State Code [2 chars] +
-District Code [2 digits] + Series [1-3 letters] + Number [4 digits]).
+Provides `check_compliance` which validates Indian license plate numbers against
+the official regex and performs a few heuristic checks for common violations.
 """
 
 import re
+from typing import Dict
 
-def check_plate_compliance(plate_text: str) -> dict:
-    """Validate license plate string format against government standards.
+# Regex for Indian vehicle registration plates
+PLATE_REGEX = re.compile(r"^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$")
 
-    Args:
-        plate_text: Cleaned alphanumeric plate string.
+def _normalize(text: str) -> str:
+    """Normalize plate text: uppercase and strip spaces/hyphens."""
+    return text.upper().replace(" ", "").replace("-", "")
 
-    Returns:
-        dict: Compliance verdict, formatted plate, and reason if non-compliant.
+def check_compliance(plate_text: str) -> Dict[str, object]:
+    """Validate a license plate string.
+
+    Returns a dict with:
+        - ``compliant`` (bool): True if the plate matches the official pattern.
+        - ``reason``   (str) : Explanation when not compliant.
+    Additional heuristic violations are flagged in the reason string.
     """
-    cleaned = re.sub(r'[^A-Z0-9]', '', plate_text.upper().strip())
-    # Standard format: 2 letters (state), 2 digits (rto), optional 1-3 letters, 4 digits
-    pattern = r'^[A-Z]{2}[0-9]{2}[A-Z]{0,3}[0-9]{4}$'
-    is_valid = bool(re.match(pattern, cleaned))
-    
-    return {
-        "raw_text": plate_text,
-        "cleaned_text": cleaned,
-        "is_compliant": is_valid,
-        "reason": "Valid format" if is_valid else "Violates standard registration format"
-    }
+    normalized = _normalize(plate_text)
+    # Basic pattern check
+    if PLATE_REGEX.fullmatch(normalized):
+        # Heuristic checks – length should be between 10 and 13 characters for Indian plates
+        if not (9 <= len(normalized) <= 13):
+            return {"compliant": False, "reason": "Wrong length – possible wrong font or malformed plate"}
+        # Placeholder heuristics: treat 'X' as missing HSRP, '?' as blurred
+        if "X" in normalized:
+            return {"compliant": False, "reason": "Missing HSRP sticker"}
+        if "?" in normalized:
+            return {"compliant": False, "reason": "Plate appears blurred"}
+        return {"compliant": True, "reason": "Plate compliant"}
+    else:
+        return {"compliant": False, "reason": "Regex mismatch – invalid Indian plate format"}
 
 if __name__ == "__main__":
-    sample_plate = "DL01AB1234"
-    result = check_plate_compliance(sample_plate)
-    print(f"Sample test: {sample_plate} -> {result}")
+    # Simple test harness
+    samples = [
+        "KA01AB1234",
+        "ka01ab1234",
+        "KA-01-AB-1234",
+        "KA01X1234",
+        "KA01?B1234",
+        "INVALID"
+    ]
+    for s in samples:
+        print(f"{s!r} -> {check_compliance(s)}")

@@ -1,16 +1,5 @@
-# SignalGuard YOLO Dataset Configuration
-# Defines paths and class definitions for traffic vehicle and license plate detection.
-
-path: ../data
 train: annotated/train/images
 val: annotated/val/images
-test: annotated/test/images
 
-# Classes
-nc: 5
-names:
-  0: vehicle_2w
-  1: vehicle_3w
-  2: vehicle_4w
-  3: license_plate
-  4: person
+nc: 3
+names: ["vehicle", "number_plate", "person"]

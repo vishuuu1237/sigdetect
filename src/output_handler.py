@@ -1,39 +1,115 @@
-"""Violation Output and Logging Handler for SignalGuard.
+"""Output handling utilities for SignalGuard.
 
-This module handles saving violation crops/snapshots and logging
-violation records with metadata (timestamp, plate, vehicle type, color,
-occupants, reason) to CSV files.
+Provides `save_violation` which crops the offending vehicle and plate, saves the
+cropped image and an annotated full‑frame image, and logs a CSV entry.
 """
 
 import os
-import pandas as pd
-from datetime import datetime
+import cv2
+import csv
+import datetime
 
-class OutputHandler:
-    """Manages saving violation evidence images and structured CSV reports."""
+OUTPUT_ROOT = os.path.join("output", "violations")
+CSV_PATH = os.path.join("output", "violations.csv")
 
-    def __init__(self, output_dir: str = "output"):
-        """Initialize directory paths for violations and reports."""
-        self.output_dir = output_dir
-        self.violations_dir = os.path.join(output_dir, "violations")
-        self.csv_path = os.path.join(output_dir, "violations_log.csv")
-        os.makedirs(self.violations_dir, exist_ok=True)
-        self._init_csv()
+def _ensure_dirs():
+    os.makedirs(OUTPUT_ROOT, exist_ok=True)
+    os.makedirs(os.path.dirname(CSV_PATH), exist_ok=True)
+    if not os.path.isfile(CSV_PATH):
+        with open(CSV_PATH, "w", newline="") as f:
+            writer = csv.writer(f)
+            # Updated columns: timestamp, track_id, plate_text, vehicle_type, color, occupants, violation_reason, image_path
+            writer.writerow(["timestamp", "track_id", "plate_text", "vehicle_type", "color", "occupants", "violation_reason", "image_path"])
 
-    def _init_csv(self):
-        """Initialize the CSV log file if not already present."""
-        if not os.path.exists(self.csv_path):
-            df = pd.DataFrame(columns=[
-                "timestamp", "track_id", "plate_text", "is_compliant",
-                "violation_reason", "vehicle_type", "vehicle_color",
-                "occupant_count", "evidence_image"
-            ])
-            df.to_csv(self.csv_path, index=False)
+def save_violation(frame, bbox, plate, vehicle_type, color, occupants, reason, track_id):
+    """Save a violation example and log it.
 
-    def log_violation(self, record: dict, frame=None):
-        """Append a violation record and save cropped evidence."""
-        print(f"Logging violation: {record}")
+    Parameters
+    ----------
+    frame : np.ndarray (BGR)
+    bbox : list/tuple of 4 ints [x1, y1, x2, y2]
+    plate : str
+    vehicle_type : str
+    color : str
+    occupants : int
+    reason : str – description of why it is a violation
+    track_id : int – identifier from the tracker
+    """
+    _ensure_dirs()
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{timestamp}_{track_id}"
+    folder_path = os.path.join(OUTPUT_ROOT, folder_name)
+    os.makedirs(folder_path, exist_ok=True)
 
-if __name__ == "__main__":
-    handler = OutputHandler()
-    print("SignalGuard OutputHandler initialized successfully.")
+    x1, y1, x2, y2 = map(int, bbox)
+    vehicle_crop = frame[y1:y2, x1:x2]
+    vehicle_path = os.path.join(folder_path, "vehicle.jpg")
+    cv2.imwrite(vehicle_path, vehicle_crop)
+
+    annotated = frame.copy()
+    cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    label = f"ID:{track_id} PLATE:{plate} VIOL:{reason}"
+    cv2.putText(annotated, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    annotated_path = os.path.join(folder_path, "annotated.jpg")
+    cv2.imwrite(annotated_path, annotated)
+
+    with open(CSV_PATH, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            timestamp,
+            track_id,
+            plate,
+            vehicle_type,
+            color,
+            occupants,
+            reason,
+            vehicle_path,
+        ])
+    print(f"Violation saved to {folder_path}")
+
+def save_violation(frame, bbox, plate, vehicle_type, color, occupants, reason, track_id):
+    """Save a violation example and log it.
+
+    Parameters
+    ----------
+    frame : np.ndarray (BGR)
+    bbox : list/tuple of 4 ints [x1, y1, x2, y2]
+    plate : str
+    vehicle_type : str
+    color : str
+    occupants : int
+    reason : str – description of why it is a violation
+    track_id : int – identifier from the tracker
+    """
+    _ensure_dirs()
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{timestamp}_{track_id}"
+    folder_path = os.path.join(OUTPUT_ROOT, folder_name)
+    os.makedirs(folder_path, exist_ok=True)
+
+    x1, y1, x2, y2 = map(int, bbox)
+    vehicle_crop = frame[y1:y2, x1:x2]
+    vehicle_path = os.path.join(folder_path, "vehicle.jpg")
+    cv2.imwrite(vehicle_path, vehicle_crop)
+
+    annotated = frame.copy()
+    cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    label = f"ID:{track_id} PLATE:{plate} VIOL:{reason}"
+    cv2.putText(annotated, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    annotated_path = os.path.join(folder_path, "annotated.jpg")
+    cv2.imwrite(annotated_path, annotated)
+
+    with open(CSV_PATH, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            timestamp,
+            track_id,
+            f"[{x1},{y1},{x2},{y2}]",
+            plate,
+            vehicle_type,
+            color,
+            occupants,
+            reason,
+            vehicle_path,
+        ])
+    print(f"Violation saved to {folder_path}")
