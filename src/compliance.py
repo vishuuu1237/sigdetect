@@ -15,27 +15,30 @@ def _normalize(text: str) -> str:
     return text.upper().replace(" ", "").replace("-", "")
 
 def check_compliance(plate_text: str) -> Dict[str, object]:
-    """Validate a license plate string.
+    """Validate a license plate string against Indian standard format.
 
     Returns a dict with:
         - ``compliant`` (bool): True if the plate matches the official pattern.
         - ``reason``   (str) : Explanation when not compliant.
-    Additional heuristic violations are flagged in the reason string.
     """
+    if not plate_text or not plate_text.strip():
+        return {"compliant": False, "reason": "No plate detected / unreadable"}
+
     normalized = _normalize(plate_text)
-    # Basic pattern check
+
+    # Basic pattern check: e.g., MH12AB1234 or DL1CA1234 or HR26DQ5551
     if PLATE_REGEX.fullmatch(normalized):
-        # Heuristic checks – length should be between 10 and 13 characters for Indian plates
-        if not (9 <= len(normalized) <= 13):
-            return {"compliant": False, "reason": "Wrong length – possible wrong font or malformed plate"}
-        # Placeholder heuristics: treat 'X' as missing HSRP, '?' as blurred
-        if "X" in normalized:
-            return {"compliant": False, "reason": "Missing HSRP sticker"}
-        if "?" in normalized:
-            return {"compliant": False, "reason": "Plate appears blurred"}
-        return {"compliant": True, "reason": "Plate compliant"}
+        # Length check for standard Indian registration plates
+        if not (8 <= len(normalized) <= 12):
+            return {"compliant": False, "reason": "Non-standard character count"}
+        if "?" in normalized or "~" in normalized:
+            return {"compliant": False, "reason": "Plate text partially occluded or blurred"}
+        return {"compliant": True, "reason": "Plate compliant (Standard HSRP format)"}
     else:
-        return {"compliant": False, "reason": "Regex mismatch – invalid Indian plate format"}
+        # Check if partially valid or non-standard format
+        if len(normalized) < 4:
+            return {"compliant": False, "reason": "Incomplete plate number"}
+        return {"compliant": False, "reason": "Invalid registration format (Non-HSRP / Fancy Font)"}
 
 if __name__ == "__main__":
     # Simple test harness
