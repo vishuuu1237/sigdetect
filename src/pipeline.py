@@ -54,14 +54,22 @@ class SignalGuardPipeline:
         self.color_classifier = None
         if os.path.isfile("models/type_classifier.pt"):
             try:
-                self.type_classifier = torch.load("models/type_classifier.pt", map_location=self.device)
-                self.type_classifier.eval()
+                loaded = torch.load("models/type_classifier.pt", map_location=self.device)
+                if hasattr(loaded, 'eval'):
+                    loaded.eval()
+                    self.type_classifier = loaded
+                else:
+                    self.type_classifier = None
             except Exception as e:
                 print(f"Warning: Failed to load type_classifier.pt: {e}")
         if os.path.isfile("models/color_classifier.pt"):
             try:
-                self.color_classifier = torch.load("models/color_classifier.pt", map_location=self.device)
-                self.color_classifier.eval()
+                loaded = torch.load("models/color_classifier.pt", map_location=self.device)
+                if hasattr(loaded, 'eval'):
+                    loaded.eval()
+                    self.color_classifier = loaded
+                else:
+                    self.color_classifier = None
             except Exception as e:
                 print(f"Warning: Failed to load color_classifier.pt: {e}")
                 
